@@ -240,3 +240,13 @@ set bootargs noinitrd root=/dev/mtdblock4 rw init=/linuxrc console=ttySAC0,11520
 #define CONFIG_BOOTCOMMAND	"nand read.jffs2 0x30007FC0 kernel; nand read.jffs2 32000000 device_tree; bootm 0x30007FC0 - 0x32000000"
 ```
 
+配置内核支持设备树
+
+```bash
+make menuconfig
+    Boot options  ---> 
+    	[*] Flattened Device Tree support 
+```
+
+make uImage dtbs
+
