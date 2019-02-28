@@ -112,7 +112,7 @@ static struct platform_device smdk_led7 = {
 static struct mtd_partition smdk_default_nand_part[] = {
 	[0] = {
 		.name	= "bootloader",
-		.size	= SZ_512K,
+		.size	= SZ_256K,
 		.offset	= 0,
 	},
 	[1] = {

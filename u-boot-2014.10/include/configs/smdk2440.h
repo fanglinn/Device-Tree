@@ -23,6 +23,8 @@
 #define CONFIG_SMDK2440         /* on a SAMSUNG SMDK2440 Board */
 
 
+#define CONFIG_OF_LIBFDT        1 /* add by Flinn for device tree */
+
 #define CONFIG_SYS_TEXT_BASE	0x33f00000
 
 #define CONFIG_SYS_ARM_CACHE_WRITETHROUGH
@@ -105,8 +107,8 @@
 #define CONFIG_ZERO_BOOTDELAY_CHECK
 
 #define CONFIG_NETMASK          255.255.255.0
-#define CONFIG_IPADDR           192.168.1.111
-#define CONFIG_SERVERIP         192.168.1.113
+#define CONFIG_IPADDR           192.168.10.123
+#define CONFIG_SERVERIP         192.168.10.125
 #define CONFIG_ETHADDR          00:0c:29:45:c4:c3
 
 #if defined(CONFIG_CMD_KGDB)
@@ -123,8 +125,9 @@
 #define MTDIDS_DEFAULT		"nand0=smdk2440-0"
 
 #define MTDPARTS_DEFAULT "mtdparts=smdk2440-0:256k(bootloader),"	\
+					"128k(device_tree),"         \
 					"128k(params),"		\
-					"2m(kernel),"		\
+					"5m(kernel),"		\
 					"-(rootfs)"	
 #define CONFIG_SYS_LONGHELP		/* undef to save memory */
 #define CONFIG_SYS_PROMPT	"SMDK2410 # "
@@ -180,7 +183,7 @@
 #define CONFIG_ENV_OVERWRITE
 #else
 #define CONFIG_ENV_IS_IN_NAND
-#define CONFIG_ENV_OFFSET 0x00040000
+#define CONFIG_ENV_OFFSET 0x00060000
 #define CONFIG_ENV_SIZE 0x20000
 #define CONFIG_ENV_RANGE CONFIG_ENV_SIZE	
 #endif
