@@ -1,0 +1,41 @@
+u-boot1.1.6              -arm-linux-gcc-3.4.5
+linux-4.19-rc3           -
+
+
+u-boot1.1.6编译
+	在Makefile里面修改编译器
+	make 100ask24x0_config
+	make
+
+linux编译
+	修改gcc   = /home/flinn/tools/4.9.4/bin/arm-linux-gnueabi-
+	cp config_ok .config           // 配置
+	make uImage                    // 编译, 可以得到arch/arm/boot/uImage
+	make dtbs                      // 编译, 可以得到arch/arm/boot/dts/jz2440.dtb
+	
+
+烧写bootloader
+	tftp 30000000 u-boot.bin
+	nand erase bootloader
+	nand write.jffs2 30000000 	bootloader
+
+kernel
+	tftp 30000000 uImage
+	nand erase kernel
+	nand write.jffs2 30000000 kernel
+	
+yaffs
+	tftp 30000000 fs_mini_mdev_new.yaffs2
+	nand erase root
+	nand write.jffs2 30000000 0x00480000 791340
+
+
+烧写device_tree
+	tftp 30000000 jz2440.dtb
+	nand erase device_tree
+	nand write.jffs2 30000000 device_tree
+	
+	
+	
+	
+	

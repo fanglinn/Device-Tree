@@ -1,0 +1,847 @@
+移植u-boot-2014.10
+
+/***************************************************
+*u-boot版本 ：u-boot-2014.10
+*gcc版本    ：/home/flinn/tools/4.4.3/bin/arm-none-linux-gnueabi-
+*
+*服务器     ：ubuntu14.05
+*
+*编译命令   ：make smdk2440_config;make
+*Note(s)    : 不要使用gcc-4.3.2（坑）
+***************************************************/
+
+
+一 解压， 建立单板
+	tar xvf u-boot-2014.10.tar.bz2
+	cd u-boot-2014.10/
+	
+	cp -r board/samsung/smdk2410/ board/samsung/smdk2440/
+	mv board/samsung/smdk2440/smdk2410.c board/samsung/smdk2440/smdk2440.c
+	vim board/samsung/smdk2440/Makefile
+		obj-y   := smdk2440.o
+	
+	cp include/configs/smdk2410.h include/configs/smdk2440.h
+	
+	vim board/samsung/smdk2440/MAINTAINERS
+			SMDK2440 BOARD
+			M:      David Müller <d.mueller@elsoft.ch>
+			S:      Maintained
+			F:      board/samsung/smdk2440/
+			F:      include/configs/smdk2440.h
+			F:      configs/smdk2440_defconfig
+	
+	vim board/samsung/smdk2440/Kconfig
+			if TARGET_SMDK2440
+			config SYS_CPU
+			        default "arm920t"			
+			config SYS_BOARD
+			        default "smdk2440"			
+			config SYS_VENDOR
+			        default "samsung"			
+			config SYS_SOC
+			        default "s3c24x0"			
+			config SYS_CONFIG_NAME
+			        default "smdk2440"			
+			endif
+			
+	vim arch/arm/Kconfig
+			+config TARGET_SMDK2440
+      +    bool "Support smdk2440"
+
+			+source "board/samsung/smdk2440/Kconfig"
+
+	cp configs/smdk2410_defconfig configs/smdk2440_defconfig
+			CONFIG_ARM=y
+			CONFIG_TARGET_SMDK2440=y
+	
+	修改顶层Makefile
+			+CROSS_COMPILE ?= /home/flinn/tools/4.4.3/bin/arm-none-linux-gnueabi-
+	
+	修改配置文件include/configs/smdk2440.h
+			-#define CONFIG_S3C2410                /* specifically a SAMSUNG S3C2410 SoC */
+			-#define CONFIG_SMDK2410               /* on a SAMSUNG SMDK2410 Board */
+			+#define CONFIG_S3C2440
+			+#define CONFIG_SMDK2440
+	
+	编译
+		make smdk2440_defconfig
+		make (如果要看到详细信息， 比如链接地址，-pie等， 执行make V=1)
+	
+	如果修改smdk2440.h后编译报错 u-boot.lds:1: ignoring invalid character `#' in expression
+		vim arch/arm/cpu/u-boot.lds
+			-#include <config.h>
+	
+	以上单板建立完成， 初次编译会报错NAND和YAFFS相关的， 在smdk2440.h里面去掉相关宏
+	编译出来的u-boot.bin 约370K，前面的分区256K显然不够， 先作裁剪
+	去掉：
+		USB相关的
+		//#define CONFIG_USB_OHCI
+		//#define CONFIG_USB_OHCI_S3C24XX
+		//#define CONFIG_USB_KEYBOARD
+		//#define CONFIG_USB_STORAGE
+		//#define CONFIG_DOS_PARTITION
+		//#define CONFIG_CMD_USB
+		
+		解压格式
+		//#define CONFIG_BZIP2
+		//#define CONFIG_LZO
+		//#define CONFIG_LZMA
+
+		文件系统相关的
+		//#define CONFIG_CMD_FAT
+		//#define CONFIG_CMD_EXT2
+		//#define CONFIG_CMD_UBI
+		//#define CONFIG_CMD_UBIFS
+		//#define CONFIG_CMD_MTDPARTS
+		//#define CONFIG_MTD_DEVICE
+		//#define CONFIG_MTD_PARTITIONS
+		//#define CONFIG_YAFFS2
+		//#define CONFIG_RBTREE
+		
+		再次编译后u-boot.bin文件才160K左右，满足我们的需求
+		
+二 烧写测试（NOR）， 无任何输出		
+		先解决串口输出问题，入手
+		① 时钟配置
+				vim arch/arm/cpu/arm920t/start.S
+				+# if defined(CONFIG_S3C2410) || defined(CONFIG_S3C2440)
+        ldr     r1, =0x3ff
+        ldr     r0, =INTSUBMSK
+        str     r1, [r0]
+        
+        /* FCLK:HCLK:PCLK = 1:2:4 */
+        /* default FCLK is 120 MHz ! */
+        ldr     r0, =CLKDIVN
+        mov     r1, #5
+        str     r1, [r0]
+
+        /* add by Flinn */
+				#define S3C2440_MPLL_200MHZ     ((0x5c<<12)|(0x01<<4)|(0x02))
+				#define S3C2440_MPLL_400MHZ     ((0x5c<<12)|(0x01<<4)|(0x01))
+
+        mrc     p15, 0, r1, c1, c0, 0   
+        orr     r1, r1, #0xc0000000
+        mcr     p15, 0, r1, c1, c0, 0
+
+        /* MPLLCON = S3C2440_MPLL_400MHZ */
+        ldr r0, =0x4c000004
+        ldr r1, =S3C2440_MPLL_400MHZ
+        str r1, [r0]
+
+		② SDRAM设置
+			vim board/samsung/smdk2440/lowlevel_init.S
+				#define REFCNT                  1113   -> 0x4f4
+				
+		③ 时钟前面设置了， 删除后面的
+			vim board/samsung/smdk2440/smdk2440.c
+				board_early_init_f（）：
+				#if 0
+	        /* to reduce PLL lock time, adjust the LOCKTIME register */
+	        writel(0xFFFFFF, &clk_power->locktime);
+	
+	        /* configure MPLL */
+	        writel((M_MDIV << 12) + (M_PDIV << 4) + M_SDIV,
+	               &clk_power->mpllcon);
+	
+	        /* some delay between MPLL and UPLL */
+	        pll_delay(4000);
+	
+	        /* configure UPLL */
+	        writel((U_M_MDIV << 12) + (U_M_PDIV << 4) + U_M_SDIV,
+	               &clk_power->upllcon);
+				#endif
+				
+		再次烧写
+			U-Boot 2014.10 (Nov 01 2018 - 11:06:54)
+			
+			CPUID: 32440001
+			FCLK:      400 MHz
+			HCLK:      100 MHz
+			PCLK:       50 MHz
+			DRAM:  64 MiB
+			WARNING: Caches not enabled
+			Flash: *** failed ***
+			### ERROR ### Please RESET the board ###
+	
+		原因是
+			board_init_r
+				flash_init 此时我们的nor flash还不识别
+				去掉
+				else {
+					puts(failed);
+					//hang();
+				}
+				
+				
+				
+	重新编译烧写
+		U-Boot 2014.10 (Nov 01 2018 - 11:14:31)
+
+		CPUID: 32440001
+		FCLK:      400 MHz
+		HCLK:      100 MHz
+		PCLK:       50 MHz
+		DRAM:  64 MiB
+		WARNING: Caches not enabled
+		Flash: *** failed ***
+		*** Warning - bad CRC, using default environment
+		
+		In:    serial
+		Out:   serial
+		Err:   serial
+		Net:   CS8900-0
+		Error: CS8900-0 address not set.
+		
+		Warning: Your board does not use generic board. Please read
+		doc/README.generic-board and take action. Boards not
+		upgraded by the late 2014 may break or be removed.
+
+三  识别Nor Flash
+		主要是将我们使用的nor flash 型号添加到jedec_table中
+		File : drivers/mtd/jedec_flash.c
+		#define MX29LV160B      0x2249
+		jz2440    ：MX29LV160DB       2M  id= 0x2249, MX29LV160B 宏需要自己添加
+				// for jz2440
+				{
+					.mfr_id		= MT_MANUFACT,
+					.dev_id		= MX29LV160B,
+					.name		= "MXIC MX29LV160B",
+					.uaddr		= {
+						[0] = MTD_UADDR_0x0AAA_0x0555,  /* x8 */
+						[1] = MTD_UADDR_0x0555_0x02AA,  /* x16 */
+					},
+					.DevSize	= SIZE_2MiB,
+					.CmdSet		= P_ID_AMD_STD,
+					.NumEraseRegions= 4,
+					.regions	= {
+					ERASEINFO(0x04000,1),
+					ERASEINFO(0x02000,2),
+					ERASEINFO(0x08000,1),
+					ERASEINFO(0x10000,31)
+					}
+				},
+		mini2440  ：SST29LV1601 （AM29LV160DB）   35sectors   id = 0x2249
+				// for mini2440
+				{
+					.mfr_id		= AMD_MANUFACT,
+					.dev_id		= AM29LV160DB,
+					.name		= "AMD AM29LV160DB",
+					.uaddr		= {
+						[0] = MTD_UADDR_0x0AAA_0x0555,  /* x8 */
+						[1] = MTD_UADDR_0x0555_0x02AA   /* x16 */
+					},
+					.DevSize	= SIZE_2MiB,
+					.CmdSet		= P_ID_AMD_STD,
+					.NumEraseRegions= 4,
+					.regions	= {
+						ERASEINFO(0x04000,1),
+						ERASEINFO(0x02000,2),
+						ERASEINFO(0x08000,1),
+						ERASEINFO(0x10000,31)
+					}
+				}, 
+		
+		在smdk2440.h里面把#define CONFIG_SYS_MAX_FLASH_SECT	(19)   改成35
+		
+		再次编译并烧写：
+		U-Boot 2014.10 (Nov 01 2018 - 11:32:28)
+
+		CPUID: 32440001
+		FCLK:      400 MHz
+		HCLK:      100 MHz
+		PCLK:       50 MHz
+		DRAM:  64 MiB
+		WARNING: Caches not enabled
+		Flash: 2 MiB
+		*** Warning - bad CRC, using default environment
+		
+		In:    serial
+		Out:   serial
+		Err:   serial
+		Net:   CS8900-0
+		Error: CS8900-0 address not set.
+		
+		Warning: Your board does not use generic board. Please read
+		doc/README.generic-board and take action. Boards not
+		upgraded by the late 2014 may break or be removed.
+
+		可知， nor flash已经被正确识别，可以在smdk2440.h里面定义DEBUG宏看出更详细信息。
+		
+		去掉最后那个Warning， 在common/main.c  里面main_loop里面：
+		#ifndef CONFIG_SYS_GENERIC_BOARD
+			puts("Warning: Your board does not use generic board. Please read\n");
+			puts("doc/README.generic-board and take action. Boards not\n");
+			puts("upgraded by the late 2014 may break or be removed.\n");
+		#endif
+
+完整打印：
+		U-Boot 2014.10 (Nov 01 2018 - 11:35:59)
+		
+		U-Boot code: 00000000 -> 0002675C  BSS: -> 0002BED4
+		CPUID: 32440001
+		FCLK:      400 MHz
+		HCLK:      100 MHz
+		PCLK:       50 MHz
+		monitor len: 0002BED4
+		ramsize: 04000000
+		TLB table from 33ff0000 to 33ff4000
+		Top of RAM usable for U-Boot at: 33ff0000
+		Reserving 175k for U-Boot at: 33fc4000
+		Reserving 4160k for malloc() at: 33bb4000
+		Reserving 28 Bytes for Board Info at: 33bb3fe4
+		Reserving 160 Bytes for Global Data at: 33bb3f44
+		New Stack Pointer is: 33bb3f38
+		RAM Configuration:
+		Bank #0: 30000000 64 MiB
+		relocation Offset is: 33fc4000
+		WARNING: Caches not enabled
+		monitor flash len: 0002B8BC
+		dram_bank_mmu_setup: bank: 0
+		Now running in RAM - U-Boot at: 33fc4000
+		Flash: fwc addr 00000000 cmd f0 00f0 16bit x 16 bit
+		fwc addr 0000aaaa cmd aa 00aa 16bit x 16 bit
+		fwc addr 00005554 cmd 55 0055 16bit x 16 bit
+		fwc addr 0000aaaa cmd 90 0090 16bit x 16 bit
+		fwc addr 00000000 cmd f0 00f0 16bit x 16 bit
+		JEDEC PROBE: ID 1 2249 0
+		Found JEDEC Flash: AMD AM29LV160DB              // 表示识别我们的nor flash
+		unlock address index 1
+		unlock addresses are 0x555/0x2aa
+		erase_region_count = 1 erase_region_size = 16384
+		erase_region_count = 2 erase_region_size = 8192
+		erase_region_count = 1 erase_region_size = 32768
+		erase_region_count = 31 erase_region_size = 65536
+		flash_protect ON: from 0x00000000 to 0x0002B8BB
+		protect on 0
+		protect on 1
+		protect on 2
+		protect on 3
+		protect on 4
+		protect on 5
+		flash_protect ON: from 0x00070000 to 0x0007FFFF
+		protect on 10
+		2 MiB
+		*** Warning - bad CRC, using default environment
+		
+		Destroy Hash Table: 33fe9cb8 table = 00000000
+		Create Hash Table: N=75
+		INSERT: table 33fe9cb8, filled 1/79 rv 33bb4238 ==> name="bootdelay" value="5"
+		INSERT: table 33fe9cb8, filled 2/79 rv 33bb40f8 ==> name="baudrate" value="115200"
+		INSERT: table 33fe9cb8, filled 3/79 rv 33bb40a8 ==> name="ipaddr" value="10.0.0.110"
+		INSERT: table 33fe9cb8, filled 4/79 rv 33bb4260 ==> name="serverip" value="10.0.0.1"
+		INSERT: table 33fe9cb8, filled 5/79 rv 33bb44f4 ==> name="netmask" value="255.255.255.0"
+		INSERT: free(data = 33bb4008)
+		INSERT: done
+		In:    serial
+		Out:   serial
+		Err:   serial
+		Initial value for argc=3
+		Final value for argc=3
+		Initial value for argc=3
+		Final value for argc=3
+		Initial value for argc=3
+		Final value for argc=3
+		Net:   Initial value for argc=3
+		Final value for argc=3
+		CS8900-0
+		Error: CS8900-0 address not set.
+		
+		### main_loop entered: bootdelay=5
+		
+		### main_loop: bootcmd="<UNDEFINED>"
+		
+		
+四 移植dm9000 
+		在smdk2440.h里面
+		#if 0
+		#define CONFIG_DRIVER_CS8900	1	/* we have a CS8900 on-board */
+		#define CS8900_BASE		0x19000300
+		#define CS8900_BUS16		1 /* the Linux driver does accesses as shorts */
+		#endif
+		
+		#if !defined(CONFIG_DRIVER_CS8900)
+		#define CONFIG_DRIVER_DM9000		1
+		#define CONFIG_DM9000_USE_16BIT 	1
+		#define CONFIG_DM9000_BASE			0x20000000
+		#define DM9000_IO					0x20000000  
+		#define DM9000_DATA					0x20000004
+		#endif
+		
+		并修改默认IP配置
+
+		在什么smdk2440.c board_eth_init函数里面添加
+		#ifdef CONFIG_DRIVER_DM9000
+				rc = dm9000_initialize(bis);
+		#endif
+		
+		再次烧写，可以识别
+		Net:   dm9000
+		
+		SMDK2440 # bdinfo
+		arch_number = 0x000000C1
+		boot_params = 0x30000100
+		DRAM bank   = 0x00000000
+		-> start    = 0x30000000
+		-> size     = 0x04000000
+		eth0name    = dm9000
+		ethaddr     = (not set)
+		current eth = dm9000
+		ip_addr     = 192.168.1.111
+		baudrate    = 115200 bps
+		TLB addr    = 0x33FF0000
+		relocaddr   = 0x33FC7000
+		reloc off   = 0x33FC7000
+		irq_sp      = 0x33BB6F44
+		sp start    = 0x33BB6F38
+
+	设置ip
+		#define CONFIG_NETMASK          255.255.255.0
+		#define CONFIG_IPADDR           192.168.1.111
+		#define CONFIG_SERVERIP         192.168.1.113
+		#define CONFIG_ETHADDR          00:0c:29:45:c4:c3 
+
+五  nand移植
+		在smdk2440.h里面去掉NAND的配置选项	
+		#define CONFIG_CMD_NAND
+			编译出错
+			drivers/mtd/nand/s3c2410_nand.c: In function 's3c2410_hwcontrol':
+			drivers/mtd/nand/s3c2410_nand.c:44: warning: implicit declaration of function 's3c2410_get_base_nand'
+			drivers/mtd/nand/s3c2410_nand.c:44: warning: initialization makes pointer from integer without a cast
+			drivers/mtd/nand/s3c2410_nand.c:59: error: dereferencing pointer to incomplete type
+			drivers/mtd/nand/s3c2410_nand.c:59: error: dereferencing pointer to incomplete type
+			drivers/mtd/nand/s3c2410_nand.c:62: error: dereferencing pointer to incomplete type
+	
+		 cp drivers/mtd/nand/s3c2410_nand.c drivers/mtd/nand/s3c2440_nand.c
+		 vim drivers/mtd/nand/Makefile
+
+		把drivers/mtd/nand/s3c2440_nand.c 里面所有的s3c2410改成s3c2440
+		并修改Makefile
+    	COBJS-$(CONFIG_NAND_S3C2410) += s3c2410_nand.o       ==>
+    	COBJS-$(CONFIG_NAND_S3C2440) += s3c2440_nand.o
+    
+    同时需要修改配置文件smdk2440.h
+   	 /*
+		 * NAND configuration
+		 */
+		#ifdef CONFIG_CMD_NAND
+		#define CONFIG_NAND_S3C2410        == >#define CONFIG_NAND_S3C2440 
+		#define CONFIG_SYS_S3C2410_NAND_HWECC   ==>#define CONFIG_SYS_S3C2440_NAND_HWECC
+
+		在drivers/mtd/nand/s3c2440_nand.c
+		int board_nand_init(struct nand_chip *nand)
+				#if 0
+        cfg = S3C2440_NFCONF_EN;
+        cfg |= S3C2440_NFCONF_TACLS(tacls - 1);
+        cfg |= S3C2440_NFCONF_TWRPH0(twrph0 - 1);
+        cfg |= S3C2440_NFCONF_TWRPH1(twrph1 - 1);
+				#endif
+        cfg = ((tacls-1)<<12)|((twrph0-1)<<8)|((twrph1-1)<<4);
+        writel(cfg, &nand_reg->nfconf);
+        
+        writel((1<<4)|(1<<1)|(1<<0),&nand_reg->nfcont);
+        。。。
+
+				nand->select_chip = s3c2440_nand_select;
+				
+			添加
+			static void s3c2440_nand_select(struct mtd_info *mtd, int chipnr)
+			{
+        struct s3c2440_nand *nand = s3c2440_get_base_nand();
+
+        switch (chipnr) {
+        case -1:
+                nand->nfcont |= (1<<1);
+                break;
+        case 0:
+                nand->nfcont &= ~(1<<1);
+                break;
+
+        default:
+                BUG();
+        }
+			}
+
+			重写
+			static void s3c2440_hwcontrol(struct mtd_info *mtd, int dat, unsigned int ctrl)
+			{
+        struct s3c2440_nand *nand = s3c2440_get_base_nand();
+
+        if (ctrl & NAND_CLE)
+        {
+                writeb(dat, &nand->nfcmd);
+        }
+        else if(ctrl & NAND_ALE)
+        {
+                writeb(dat, &nand->nfaddr);
+        }
+			}
+				
+		重写编译烧录
+		 
+		U-Boot 2014.10 (Nov 01 2018 - 14:26:34)
+		
+		CPUID: 32440001
+		FCLK:      400 MHz
+		HCLK:      100 MHz
+		PCLK:       50 MHz
+		DRAM:  64 MiB
+		WARNING: Caches not enabled
+		Flash: 2 MiB
+		NAND:  256 MiB
+		*** Warning - bad CRC, using default environment
+		
+		In:    serial
+		Out:   serial
+		Err:   serial
+		Net:   dm9000
+		Warning: dm9000 MAC addresses don't match:
+		Address in SROM is         ff:ff:ff:ff:ff:ff
+		Address in environment is  00:0c:29:45:c4:c3
+六  增加启动参数
+		在smdk2440.h里面添加宏
+		#define CONFIG_BOOTCOMMAND	"nand read.jffs2 0x30007FC0 0x60000 0x200000; bootm 0x30007FC0"
+		
+		如果以前烧写过内核到0x60000的位置，那么现在可以顺利从nor flash启动内核
+
+七  添加mtdparts命令，改命令可以查看当前分区，在启动参数里面可以以分区名代表地址和长度
+		grep "cmd_mtdpart" * -nR
+		搜索可知，mtdpart在cmd_mtdparts.c里面定义
+		common/Makefile:147:obj-$(CONFIG_CMD_MTDPARTS) += cmd_mtdparts.o
+		
+		因此需要定义CONFIG_CMD_MTDPARTS,CONFIG_MTD_DEVICE
+			
+		#define MTDIDS_DEFAULT		"nand0=smdk2440-0"
+
+		#define MTDPARTS_DEFAULT "mtdparts=smdk2440-0:256k(bootloader),"	\
+							"128k(params),"		\
+							"2m(kernel),"		\
+							"-(rootfs)"	
+	
+		参考别人， 在board_init_r 里面添加run_command("mtdparts default", 0);即可
+
+		重新编译烧录
+		nfs下载试试看
+		nfs 30000000 192.168.1.113:/home/flinn/mini2440/bin/mini_mdev_fs.jffs2
+		nand erase.part rootfs
+		nand write.jffs2 30000000 260000 $filesize
+		set bootargs console=ttySAC0,115200 root=/dev/mtdblock3 rootfstype=jffs2
+
+		OK, nor is fine !
+
+八  环境变量存在nand flash里面
+		搜索default environment
+		在Env_common.c函数里面：
+			default_environment结构体
+			default_environment结构体定义在env_common.c里面
+		
+		其中有：
+			#ifdef	CONFIG_BOOTARGS
+				"bootargs="	CONFIG_BOOTARGS			"\0"
+			#endif
+		
+		这里CONFIG_BOOTARGS没有定义，bootargs是传给内核的环境变量，在smdk2440.h里面定义CONFIG_BOOTARGS
+		#define CONFIG_BOOTARGS "console=ttySAC0 root=/dev/mtdblock3"
+		
+		此外设置bootcmd参数：
+		#define CONFIG_BOOTCOMMAND "nand read 30000000 0x30008000 0x400000;bootm 30000000"
+		假设从0x30008000读2M到30000000
+		
+		设置ip
+			#define CONFIG_NETMASK		255.255.255.0
+			#define CONFIG_IPADDR		192.168.1.1110
+			#define CONFIG_SERVERIP		192.168.1.113
+			#define CONFIG_ETHADDR		00:0c:29:45:c4:c3	
+	
+	修改默认分区：
+	打印出来的分区信息：
+	0x00000000-0x00040000 : "bootloader"     //256k
+	0x00040000-0x00060000 : "params"	//128K
+	0x00060000-0x00460000 : "kernel"	//4M
+	0x00460000-0x10000000 : "root"
+
+
+
+	原来的环境变量的配置：
+		#define CONFIG_ENV_ADDR			(CONFIG_SYS_FLASH_BASE + 0x070000)
+		#define CONFIG_ENV_IS_IN_FLASH
+		#define CONFIG_ENV_SIZE			0x10000
+		/* allow to overwrite serial and ethaddr */
+		#define CONFIG_ENV_OVERWRITE	
+		
+		当输入save时：
+				SMDK2440 # save
+				Saving Environment to Flash...
+				Un-Protected 1 sectors
+				Erasing Flash...
+				. done
+				Erased 1 sectors
+				Writing to Flash... 9....8....7....6....5....4....3....2....1....done
+				Protected 1 sectors
+
+		
+	上面说过不要用save命令保存环境变量设置，目的是防止flash被破坏：
+		查看save命令帮助信息，知道saveenv，搜索saveenv	
+		或者在SI里面搜索可得，在common目录下看Makefile，知道依赖上面宏
+		Env_nand.c (common):int saveenv(void)
+		
+		makefile里面有：
+		COBJS-$(CONFIG_ENV_IS_IN_NAND) += env_nand.o		
+		可知需要CONFIG_ENV_IS_IN_NAND	
+		
+		不光如此，还需要知道起始地址和大小	
+		打开env_nand.c,里面有CONFIG_ENV_SIZE和CONFIG_ENV_OFFSET	
+		
+		上面的还不够，还需要擦除长度
+		nand_erase_options.length = CONFIG_ENV_RANGE;
+		
+		即需要定义CONFIG_ENV_RANGE，设为CONFIG_ENV_SIZE	
+				
+	综上所知设置为：
+		#if 0
+		#define CONFIG_ENV_ADDR			(CONFIG_SYS_FLASH_BASE + 0x070000)
+		#define CONFIG_ENV_IS_IN_FLASH
+		#define CONFIG_ENV_SIZE			0x10000
+		/* allow to overwrite serial and ethaddr */
+		#define CONFIG_ENV_OVERWRITE
+		#endif
+		#define CONFIG_ENV_IS_IN_NAND
+		#define CONFIG_ENV_OFFSET 0x00040000
+		#define CONFIG_ENV_SIZE 0x20000
+		#define CONFIG_ENV_RANGE CONFIG_ENV_SIZE	
+
+		改成nand后，输入save：
+				SMDK2440 # save
+				Saving Environment to NAND...
+				Erasing NAND...
+				Erasing at 0x40000 -- 100% complete.
+				Writing to NAND... OK
+
+
+九  重定位，支持nand启动
+		前面链接地址都是0x0，可以从nor正常启动内核和文件系统。
+		现在把链接地址改成0x33f00000
+
+		一旦更改了链接地址， u-boot从nor flash加载时，串口没有任何输出
+
+		添加文件boot_init.c
+		#define NFCONF (*((volatile unsigned long *)0x4E000000))
+		#define NFCONT (*((volatile unsigned long *)0x4E000004))
+		#define NFCMMD (*((volatile unsigned char *)0x4E000008))
+		#define NFADDR (*((volatile unsigned char *)0x4E00000C))
+		#define NFDATA (*((volatile unsigned char *)0x4E000010))
+		#define NFSTAT (*((volatile unsigned char *)0x4E000020))
+		
+		static void nand_select(void)
+		{
+			NFCONT &= ~(1<<1);	
+		}
+		
+		static void nand_deselect(void)
+		{
+			NFCONT |= (1<<1);	
+		}
+		
+		
+		static void nand_cmd(unsigned char cmd)
+		{
+			volatile int i;
+			NFCMMD = cmd;
+			for (i = 0; i < 10; i++);
+		}
+		
+		static void nand_addr(unsigned int addr)
+		{
+			unsigned int col  = addr % 2048;
+			unsigned int page = addr / 2048;
+			volatile int i;
+		
+			NFADDR = col & 0xff;
+			for (i = 0; i < 10; i++);
+			NFADDR = (col >> 8) & 0xff;
+			for (i = 0; i < 10; i++);
+			
+			NFADDR  = page & 0xff;
+			for (i = 0; i < 10; i++);
+			NFADDR  = (page >> 8) & 0xff;
+			for (i = 0; i < 10; i++);
+			NFADDR  = (page >> 16) & 0xff;
+			for (i = 0; i < 10; i++);	
+		}
+		
+		static void nand_wait_ready(void)
+		{
+			while (!(NFSTAT & 1));
+		}
+		
+		static unsigned char nand_data(void)
+		{
+			return NFDATA;
+		}
+		
+		
+		static void nand_read_ll(unsigned int addr, unsigned char *buf, unsigned int len)
+		{
+			int col = addr % 2048;
+			int i = 0;
+		
+			nand_select();
+			while (i < len)
+			{
+				nand_cmd(0x00);
+		
+				nand_addr(addr);
+		
+				nand_cmd(0x30);
+		
+				nand_wait_ready();
+		
+				for (; (col < 2048) && (i < len); col++)
+				{
+					buf[i] = nand_data();
+					i++;
+					addr++;
+				}
+				
+				col = 0;
+			}
+			
+			nand_deselect();
+		}
+		
+		static void nand_init(void)
+		{
+		#define TACLS   0
+		#define TWRPH0  1
+		#define TWRPH1  0
+		
+			NFCONF = (TACLS<<12)|(TWRPH0<<8)|(TWRPH1<<4);
+			NFCONT = (1<<4)|(1<<1)|(1<<0);	
+		}
+		
+		
+		/* 1: from nor 0: from nand */
+		static int isBootFromNorFlash(void)
+		{
+			volatile int *p = (volatile int *)0;
+			int val;
+		
+			val = *p;
+			*p = 0x12345678;
+			if (*p == 0x12345678)
+			{
+				*p = val;
+				return 0;
+			}
+			else
+			{
+				// nor
+				return 1;
+			}
+		}
+		
+		void copy_code_to_sdram(unsigned char *src, unsigned char *dest, unsigned int len)
+		{
+			int i = 0;
+			if (isBootFromNorFlash())
+			{
+				while (i < len)
+				{
+					dest[i] = src[i];
+					i++;
+				}
+			}
+			else     // from nand
+			{
+				nand_init();
+				nand_read_ll((unsigned int)src, dest, len);
+			}
+		}
+		
+		void clear_bss(void)
+		{
+			extern int __bss_start, __bss_end;
+			int *p = &__bss_start;
+			
+			for (; p < &__bss_end; p++)
+				*p = 0;
+		}
+
+		修改对应目录Makefile
+		obj-y   := smdk2440.o boot_init.o
+		
+		把smdk2440/目录下内容放最前面，满足4K内
+		vim arch/arm/cpu/u-boot.lds
+			board/samsung/smdk2440/built-in.o (.text*)
+
+		
+		修改重定位代码：
+		#if defined(CONFIG_SYS_MALLOC_F_LEN) && !defined(CONFIG_SPL_BUILD)
+        sub     sp, sp, #CONFIG_SYS_MALLOC_F_LEN
+        str     sp, [r9, #GD_MALLOC_BASE]
+		#endif
+		
+		#if defined(CONFIG_S3C2440)
+		        mov r0, #0
+		        ldr r1, = CONFIG_SYS_TEXT_BASE
+		        ldr r2, = CONFIG_SYS_TEXT_BASE
+		        ldr r3, =__bss_end
+		        sub r2, r3, r2
+		        bl copy_code_to_sdram
+		
+		        bl clear_bss
+		        ldr pc, =call_board_init_f
+		
+		call_board_init_f:
+		        mov     r0, #0
+		        bl      board_init_f
+		
+		        ldr     sp, [r9, #GD_START_ADDR_SP]     /* sp = gd->start_addr_sp */
+		        bic     sp, sp, #7                      /* 8-byte alignment for ABI compliance */
+		        ldr     r9, [r9, #GD_BD]                /* r9 = gd->bd */
+		        sub     r9, r9, #GD_SIZE                /* new GD is below bd */
+		
+		        mov r0, r9
+		        ldr r1, = CONFIG_SYS_TEXT_BASE
+		        bl  board_init_r
+		#else
+		        /* mov r0, #0 not needed due to above code */
+		        bl      board_init_f
+
+		...
+		#endif
+		
+		去掉pie选项vim arch/arm/config.mk
+		#LDFLAGS_u-boot += -pie
+		#ALL-y += checkarmreloc
+
+
+		此外board.c里面还应修改：
+		board_init_f
+				//addr -= gd->mon_len;
+        //addr &= ~(4096 - 1);
+        addr = CONFIG_SYS_TEXT_BASE ;    
+
+烧写u-boot到nand
+bootloader:
+	tftp 30000000 u-boot.bin
+	nand erase.part bootloader
+	nand write.jffs2 30000000 bootloader
+		
+烧写u-boot到nor
+	tftp 30000000 u-boot.bin
+	protect off all
+	erase 0 3ffff   (256K)
+	cp.b 30000000 0 40000
+		
+从nand启动正常
+		
+十  支持nand yaffs支持
+	添加宏#define CONFIG_CMD_NAND_YAFFS
+
+
+		
+		
+			
+
+
+

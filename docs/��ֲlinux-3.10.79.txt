@@ -1,0 +1,325 @@
+移植最新内核kernel-3.10.79
+
+
+u-boot 使用u-boot-2014.10
+
+find * -name "*2410*_defconfig"
+find * -name "*2440*_defconfig"
+
+可以看到
+arch/arm/configs/mini2440_defconfig
+arch/arm/configs/s3c2410_defconfig
+
+
+下载命令：
+
+set serverip 192.168.1.104
+kernel：
+	tftp 30000000 uImage
+	nand erase 0x000c0000 0x500000 
+	nand write.jffs2 30000000 0xc0000 0x500000
+set machid 16a
+
+
+1 基本修改
+1.1 GCC
+	export  PATH=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/home/flinn/tools/4.4.3/bin
+	
+	
+
+1.2 Makefile
+	ARCH            ?= arm
+	CROSS_COMPILE   ?= arm-linux-
+	
+	
+	或者
+	ARCH            ?= arm
+	CROSS_COMPILE   ?= /home/flinn/tools/4.4.3/bin/arm-none-linux-gnueabi-
+	
+
+1.3 编译
+	make s3c2410_defconfig;make	uImage    // s3c2410_defconfig肯定比mini2440_defconfig更全面些
+	
+	这里s3c2410_defconfig肯定有开发板的支持， 编译出来的uImage会很大。执行make menuconfig裁剪
+	
+1.4 烧录
+				
+		Uncompressing Linux... done, booting the kernel.
+		
+		Error: unrecognized/unsupported machine ID (r1 = 0x000000c1).
+		
+		Available machine support:
+		
+		ID (hex)        NAME
+		000007cf        MINI2440
+		0000016a        SMDK2440
+
+
+1.5 设置u-boot参数machid
+	set machid 16a
+	
+	boot后 乱码
+	
+	set machid 7cf,正常
+	
+	可知smdk2440时钟有问题
+
+1.6 修改时钟
+		vim arch/arm/mach-s3c24xx/mach-smdk2440.c
+		smdk2440_map_io
+			s3c24xx_init_clocks(16934400);   //改成12000000，原来不是
+
+
+	烧录启动：
+		0x000000000000-0x000000004000 : "Boot Agent"
+		mtd: partition "Boot Agent" doesn't end on an erase block -- force read-only
+		0x000000000000-0x000000200000 : "S3C2410 flash partition 1"
+
+
+	
+1.7 修改分区
+	注意：最小单位128K，否则
+	mtd: partition "device_tree" doesn't end on an erase block -- force read-only
+	
+	vim arch/arm/mach-s3c24xx/common-smdk.c
+	static struct mtd_partition smdk_default_nand_part[] = {
+        [0] = {
+                .name   = "bootloader",
+                .size   = SZ_512K,
+                .offset = 0,
+        },
+        [1] = {
+                .name   = "device_tree",
+                .offset = MTDPART_OFS_APPEND,
+                .size   = SZ_128K,
+        },
+        [2] = {
+                .name   = "params",
+                .offset = MTDPART_OFS_APPEND,
+                .size   = SZ_128K,
+        },
+        [3] = {
+                .name   = "kernel",
+                .offset = MTDPART_OFS_APPEND,
+                .size   = 0x500000,          // 5M
+        },
+        [4] = {
+                .name   = "root",
+                .offset = MTDPART_OFS_APPEND,
+                .size   = MTDPART_SIZ_FULL,
+        }
+			};
+
+
+新分区：
+device nand0 <smdk2440-0>, # parts = 5
+ #: name                size            offset          mask_flags
+ 0: bootloader          0x00080000      0x00000000      0
+ 1: device_tree         0x00020000      0x00080000      0
+ 2: params              0x00020000      0x000a0000      0
+ 3: kernel              0x00500000      0x000c0000      0
+ 4: rootfs              0x0fa40000      0x005c0000      0
+
+
+设置u-boot
+#define CONFIG_BOOTCOMMAND	"nand read.jffs2 0x30007FC0 kernel; nand read.jffs2 32000000 device_tree; bootm 0x30007FC0 - 0x32000000"
+
+
+
+
+2.0 支持yaffs
+	网站：     http://www.yaffs.net/
+	 获取方法： 执行git clone git://www.aleph1.co.uk/yaffs2 
+	 解压：tar zxf yaffs_source.tar.gz 
+	打补丁：
+		#cd /work/tmp/yaffs2               		//   cd yaffs-dir
+		#./patch-ker.sh c m ~/mini2440/linux-3.10.79    //   ./patch-ker.sh c m linux-tree
+
+	make menuconfig
+	
+	File Systems
+	---> Miscellaneous filesystems
+		---> [*]YAFFS2 file system support
+	make uImage
+	
+	出错：
+	fs/yaffs2/yaffs_vfs.c:3398: error: implicit declaration of function 'create_proc_entry'
+	原因：编译fs/yaffs2/yaffs_vfs.c时出现错误，function 'create_proc_entry'没有申明。
+	原来这个接口在linux-3.10被删除了，应该使用proc_create代替。
+
+	修改：
+	vim fs/yaffs2/yaffs_vfs.c  
+	#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,12,0)) 修改为#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
+	#define YAFFS_NEW_PROCFS
+	#include <linux/seq_file.h>
+	#endif
+
+
+Skip bad block 0x00d80000
+
+3.0 制作文件系统
+3.1 烧写现有的文件系统
+
+set serverip 192.168.1.104
+kernel：
+	tftp 30000000 uImage
+	nand erase 0x000c0000 0x500000 
+	nand write.jffs2 30000000 0xc0000 0x500000
+set machid 16a
+
+yaffs2：
+	tftp 32000000 fs_mini_mdev.yaffs2
+	nand erase.part rootfs
+	nand write.yaffs 30000000 0x5c0000 $filesize
+
+fs-jffs2
+	tftp 32000000 fs_mini_mdev.jffs2
+	nand erase.part rootfs
+	nand write.jffs2 32000000 5c0000 $filesize
+	原：bootargs=noinitrd root=/dev/mtdblock4 rw init=/linuxrc console=ttySAC0,115200
+	set bootargs noinitrd root=/dev/mtdblock4 rw init=/linuxrc console=ttySAC0,115200 rootfstype=jffs2
+
+
+3.2 制作新的根文件系统
+3.2.1 新建目录
+	mkdir ~/mini2440/rootfs/fs_new
+		
+	tar xvf busybox-1.22.1.tar.bz2
+	#make menuconfig   在setting中，制定交叉编译器
+ 	Busybox Settings  --->  
+ 	  Build Options  ---> 
+ 	  	 (arm-linux-) Cross Compiler prefix 
+ 	  	 
+	/home/flinn/tools/4.4.3/bin/arm-none-linux-gnueabi-
+	#make
+	#make CONFIG_PREFIX=/home/flinn/mini2440/rootfs/fs_new install
+	
+3.2.2 创建console
+
+	
+	现在上面编译后busybox目录是work/tmp/first_fs
+	在此目录下：ls /dev/console /dev/null -l
+	crw------- 1 root root 5, 1 2015-01-05 20:57 /dev/console
+	crw-rw-rw- 1 root root 1, 3 2015-01-05 20:30 /dev/null
+	那么根据它来创建console null等设备
+	
+	#mkdir dev
+	#cd dev
+	#mknod console c 5 1 
+	#mknod null c 1 3
+	#ls -l
+	显示：
+	 crw-r--r-- 1 root root 5, 1 2015-05-06 20:39 console
+	crw-r--r-- 1 root root 1, 3 2015-05-06 20:40 null
+	表示创建成功
+
+
+
+3.2.3 配置项
+	#mkdir etc
+	#vim  etc/inittab
+	
+	输入：
+	console::askfirst:-/bin/sh
+
+
+3.2.4 安装c库
+	#cd /home/flinn/tools/4.4.3/
+	#find /home/flinn/tools/4.4.3/ -name lib
+	显示以下库：
+		-/home/flinn/tools/4.4.3/arm-none-linux-gnueabi/debug-root/usr/lib
+		/home/flinn/tools/4.4.3/arm-none-linux-gnueabi/lib
+		/home/flinn/tools/4.4.3/arm-none-linux-gnueabi/sys-root/usr/lib
+		/home/flinn/tools/4.4.3/arm-none-linux-gnueabi/sys-root/lib
+		/home/flinn/tools/4.4.3/lib
+
+	
+	 我们需要：
+	 	/usr/local/arm/4.3.2/arm-none-linux-gnueabi/libc/armv4t/lib
+		/usr/local/arm/4.3.2/arm-none-linux-gnueabi/libc/armv4t/usr/lib
+ 
+ 
+ 
+ #cd /work/tmp/first_fs/
+ #mkdir lib
+ #mkdir usr/lib -p
+ #cp /usr/local/arm/4.3.2/arm-none-linux-gnueabi/libc/armv4t/lib/*so* /work/tmp/first_fs/lib -d
+ #cp /usr/local/arm/4.3.2/arm-none-linux-gnueabi/libc/armv4t/usr/lib/*so* /work/tmp/first_fs/usr/lib -d
+
+ 
+ 最小根文件系统已经完成。
+	
+
+制作文件系统：
+  #mkfs.jffs2 -n -s 2048 -e 128KiB -d fs_new -o fs_new.jffs2
+  #mkyaffs2image_new fs_new fs_new.yaffs2        // mkyaffs2image_new!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+还有如下错误：
+	__nand_correct_data: uncorrectable ECC error
+	__nand_correct_data: uncorrectable ECC errorend_request: I/O error, dev mtdblock4, sector 2
+	EXT3-fs (mtdblock4): error: unable to read superblock
+	__nand_correct_data: uncorrectable ECC error
+	。。。
+
+
+	原因： mkyaffs2image没有使用更新的。 
+
+
+kernel：
+	tftp 30000000 uImage
+	nand erase.part kernel
+	nand write.jffs2 30000000 kernel
+
+yaffs2：
+	tftp 32000000 fs_new.yaffs2
+	nand erase.part rootfs
+	nand write.yaffs 32000000 0x5c0000 $filesize
+
+fs-jffs2
+	tftp 32000000 fs_new.jffs2
+	nand erase.part rootfs
+	nand write.jffs2 32000000 5c0000 $filesize
+	原：bootargs=noinitrd root=/dev/mtdblock4 rw init=/linuxrc console=ttySAC0,115200
+	set bootargs noinitrd root=/dev/mtdblock4 rw init=/linuxrc console=ttySAC0,115200 rootfstype=jffs2
+
+问题1：
+	Kernel panic - not syncing: Attempted to kill init!
+	
+	
+	Kernel panic - not syncing: Attempted to kill init! exitcode=0x00000004	
+		挂载上去了，但是不会启动根文件系统
+	查找结果：	
+		kernel/exit.c:715:                      panic("Attempted to kill init! exitcode=0x%08x\n"	
+	
+	SIGILL:    illegal instruction
+	需要重新配置内核支持eabi
+		
+	原因
+	内核里面不支持编译器gcc使用的eabi接口，可以重新配置内核
+
+	 Kernel Features  ---> 
+	 	  [*] Use the ARM EABI to compile the kernel  
+
+	 make uImage
+	 
+	 
+	 
+问题2： 
+	end_request: I/O error, dev mtdblock4, sector 0	 
+	移植内核时出现了这种错误,这种错误通常是由校验造成的.这种情况的解决办法为：
+	
+	禁止Flash ECC校验
+	我们的内核都是通过UBOOT写到Nand Flash的, UBOOT通过的软件ECC算法产生ECC校验码, 这与内核校验的ECC码不一样, 内核中的ECC码是由S3C2410中Nand Flash控制器产生的. 所以, 我们在这里选择禁止内核ECC校验.
+	修改drivers/mtd/nand/s3c2410.c 文件:
+	vi drivers/mtd/nand/s3c2410.c
+	找到s3c2410_nand_init_chip()函数，在该函数体最后加上一条语句:
+	chip->ecc.mode = NAND_ECC_NONE;
+
+	 
+	 
+	 
+	 
+	 
+	 
+	 
