@@ -117,6 +117,7 @@ vim include/configs/smdk2440.h
 
 ```c
 #define CONFIG_BOOTCOMMAND	"nand read.jffs2 0x30007FC0 0x80000 0x500000;  bootm 0x30007FC0 "
+#define CONFIG_BOOTARGS	"noinitrd root=/dev/mtdblock4 rw init=/linuxrc console=ttySAC0,115200 "
 ```
 
 
@@ -184,28 +185,16 @@ set bootargs noinitrd root=/dev/mtdblock4 rw init=/linuxrc console=ttySAC0,11520
 /*
  * SAMSUNG SMDK2440 board device tree source
  *
- * Copyright (c) 2018 weidongshan@qq.com
+ * Copyright (c) 2018 Flinn682@foxmail.com
  * dtc -I dtb -O dts -o mini2440.dts mini2440.dtb
  */
  
-#define S3C2410_GPA(_nr)	((0<<16) + (_nr))
-#define S3C2410_GPB(_nr)	((1<<16) + (_nr))
-#define S3C2410_GPC(_nr)	((2<<16) + (_nr))
-#define S3C2410_GPD(_nr)	((3<<16) + (_nr))
-#define S3C2410_GPE(_nr)	((4<<16) + (_nr))
-#define S3C2410_GPF(_nr)	((5<<16) + (_nr))
-#define S3C2410_GPG(_nr)	((6<<16) + (_nr))
-#define S3C2410_GPH(_nr)	((7<<16) + (_nr))
-#define S3C2410_GPJ(_nr)	((8<<16) + (_nr))
-#define S3C2410_GPK(_nr)	((9<<16) + (_nr))
-#define S3C2410_GPL(_nr)	((10<<16) + (_nr))
-#define S3C2410_GPM(_nr)	((11<<16) + (_nr))
 
 /dts-v1/;
 
 / {
-	model = "SMDK24440";
-	compatible = "samsung,smdk2410", "samsung,smdk2440";
+	model = "SMDK2440";
+	compatible = "samsung, s3c2410","samsung,smdk2410", "samsung,smdk2440";
 
 	#address-cells = <1>;
 	#size-cells = <1>;
@@ -214,21 +203,9 @@ set bootargs noinitrd root=/dev/mtdblock4 rw init=/linuxrc console=ttySAC0,11520
 		device_type = "memory";
 		reg =  <0x30000000 0x4000000>;
 	};
-/*
-	cpus {
-		cpu {
-			compatible = "arm,arm926ej-s";
-		};
-	};
-*/	
+
 	chosen {
 		bootargs = "noinitrd root=/dev/mtdblock4 rw init=/linuxrc console=ttySAC0,115200";
-	};
-
-	
-	led {
-		compatible = "smdk2440_led";
-		reg = <S3C2410_GPF(5) 1>;
 	};
 };
 
@@ -249,4 +226,58 @@ make menuconfig
 ```
 
 make uImage dtbs
+
+烧录dtb文件到device_tree分区：
+
+```bash
+tftp 32000000 mini2440.dtb
+nand erase 0x00040000 0x20000   # nand erase.part device_tree
+nand write.jffs2 32000000 0x40000 0x20000  # nand write.jffs2 30000000 device_tree
+```
+
+启动：
+
+```bash
+nand read.jffs2 0x30007FC0 kernel;     # 读内核uImage到内存0x30007FC0
+nand read.jffs2 32000000 device_tree;  # 读dtb到内存32000000
+bootm 0x30007FC0 - 0x32000000          # 启动, 没有initrd时对应参数写为"-"
+```
+
+快速测试：
+
+```bash
+tftp 32000000 mini2440.dtb
+tftp 30007FC0 uImage
+bootm 0x30007FC0 - 0x32000000 
+or
+tftp 32000000 mini2440.dtb;tftp 30007FC0 uImage;bootm 0x30007FC0 - 0x32000000 
+```
+
+问题：
+
+```
+mini2440 # bootm 0x30007FC0 - 0x31000000
+
+## Current stack ends at 0x33cffda0 *  kernel: cmdline image address = 0x30007fc0
+
+## Booting kernel from Legacy Image at 30007fc0 ...
+
+   Image Name:   Linux-3.10.79
+   Created:      2019-03-01   2:42:44 UTC
+   Image Type:   ARM Linux Kernel Image (uncompressed)
+   Data Size:    2607344 Bytes = 2.5 MiB
+   Load Address: 30108000
+   Entry Point:  30108000
+   Verifying Checksum ... OK
+   kernel data at 0x30008000, len = 0x0027c8f0 (2607344)
+
+Skipping init Ramdisk
+No init Ramdisk
+   ramdisk start = 0x00000000, ramdisk end = 0x00000000
+- fdt: cmdline image address = 0x31000000
+Checking for 'FDT'/'FDT Image' at 31000000
+ERROR: Did not find a cmdline Flattened Device Tree
+Could not find a valid device tree
+Command failed, result=1mini2440 #
+```
 
