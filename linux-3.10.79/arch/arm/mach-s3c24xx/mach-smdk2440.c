@@ -173,9 +173,16 @@ static void __init smdk2440_machine_init(void)
 	smdk_machine_init();
 }
 
+/* add by Flinn */
+static const char *const smdk2440_dt_compat[] __initconst = {
+	"samsung,smdk2440",
+	NULL
+};
+
 MACHINE_START(S3C2440, "SMDK2440")
 	/* Maintainer: Ben Dooks <ben-linux@fluff.org> */
 	.atag_offset	= 0x100,
+	.dt_compat      = smdk2440_dt_compat,   /* add by Flinn */
 
 	.init_irq	= s3c2440_init_irq,
 	.map_io		= smdk2440_map_io,
