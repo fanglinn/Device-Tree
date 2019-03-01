@@ -26,7 +26,7 @@
 
 / {
 	model = "SMDK24440";
-	compatible = "samsung,smdk2440";
+	compatible = "samsung, smdk2410", "samsung, smdk2440","samsung,mini2440";
 
 	#address-cells = <1>;
 	#size-cells = <1>;

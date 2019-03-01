@@ -118,7 +118,9 @@
 /*
  * Miscellaneous configurable options
  */
-#define CONFIG_BOOTCOMMAND	"nand read.jffs2 0x30007FC0 0x60000 0x200000; bootm 0x30007FC0"
+#define CONFIG_BOOTCOMMAND	"nand read.jffs2 0x30007FC0 0x80000 0x500000; bootm 0x30007FC0"
+#define CONFIG_BOOTARGS		"noinitrd root=/dev/mtdblock4 rw init=/linuxrc console=ttySAC0,115200"
+
 
 #define CONFIG_CMD_MTDPARTS
 #define CONFIG_MTD_DEVICE
@@ -130,7 +132,7 @@
 					"5m(kernel),"		\
 					"-(rootfs)"	
 #define CONFIG_SYS_LONGHELP		/* undef to save memory */
-#define CONFIG_SYS_PROMPT	"SMDK2410 # "
+#define CONFIG_SYS_PROMPT	"mini2440 # "
 #define CONFIG_SYS_CBSIZE	256
 /* Print Buffer Size */
 #define CONFIG_SYS_PBSIZE	(CONFIG_SYS_CBSIZE + \
