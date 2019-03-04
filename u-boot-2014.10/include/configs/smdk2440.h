@@ -118,9 +118,11 @@
 /*
  * Miscellaneous configurable options
  */
-#define CONFIG_BOOTCOMMAND	"nand read.jffs2 0x30007FC0 0x80000 0x500000; bootm 0x30007FC0"
-#define CONFIG_BOOTARGS		"noinitrd root=/dev/mtdblock4 rw init=/linuxrc console=ttySAC0,115200"
+//#define CONFIG_BOOTCOMMAND	"nand read.jffs2 0x30007FC0 0x80000 0x500000; bootm 0x30007FC0"
+/* device tree */
+#define CONFIG_BOOTCOMMAND	"nand read.jffs2 0x30007FC0 kernel; nand read.jffs2 32000000 device_tree; bootm 0x30007FC0 - 0x32000000"
 
+#define CONFIG_BOOTARGS		"noinitrd root=/dev/mtdblock4 rw init=/linuxrc console=ttySAC0,115200"
 
 #define CONFIG_CMD_MTDPARTS
 #define CONFIG_MTD_DEVICE
