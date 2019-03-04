@@ -25,8 +25,8 @@
 /memreserve/ 0x33f00000 0x100000;
 
 / {
-	model = "SMDK24440";
-	compatible = "samsung, smdk2410", "samsung, smdk2440","samsung,mini2440";
+	model = "SMDK2440";
+	compatible = "samsung,mini2440", "samsung,smdk2440","samsung,smdk2410";
 
 	#address-cells = <1>;
 	#size-cells = <1>;
