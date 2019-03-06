@@ -554,7 +554,7 @@ int nand_write_skip_bad(nand_info_t *nand, loff_t offset, size_t *length,
 		return -EFBIG;
 	}
 
-	if (!need_skip && !(flags & WITH_DROP_FFS)) {
+	if (!need_skip && !(flags & WITH_DROP_FFS)&& !(flags & WITH_YAFFS_OOB)) {
 		rval = nand_write(nand, offset, length, buffer);
 		if (rval == 0)
 			return 0;
@@ -592,7 +592,8 @@ int nand_write_skip_bad(nand_info_t *nand, loff_t offset, size_t *length,
 
 			ops.len = pagesize;
 			ops.ooblen = nand->oobsize;
-			ops.mode = MTD_OPS_AUTO_OOB;
+			//ops.mode = MTD_OPS_AUTO_OOB;    /* fix by Flinn */
+			ops.mode = MTD_OPS_RAW ; 
 			ops.ooboffs = 0;
 
 			pages = write_size / pagesize_oob;
