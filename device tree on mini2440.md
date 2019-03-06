@@ -58,6 +58,16 @@ bootm 0x30007FC0 - 0x32000000 # （- 表示不使用ramdisk加载，如果使用
 
 
 
+NFS下载
+
+```bash
+nfs 30000000 192.168.10.140:/home/flinn/bin/uImage
+nand erase 0x00080000 0x500000
+nand write.jffs2 30000000 0x80000 0x500000
+```
+
+
+
 # u-boot
 
 ### 编译
@@ -174,6 +184,26 @@ static struct mtd_partition smdk_default_nand_part[] = {
 set bootargs noinitrd root=/dev/mtdblock4 rw init=/linuxrc console=ttySAC0,115200
 ```
 
+### 添加对设备树的支持
+
+vim arch/arm/mach-s3c24xx/mach-smdk2440.c
+
+```c
+static void __init smdk2440_init_time(void)
+{
+    s3c2440_init_clocks(12000000);    
+}
+
+/* add by Flinn */
+static const char *const smdk2440_dt_compat[] __initconst = {
+        "samsung,smdk2440", 
+        NULL
+};
+
+MACHINE_START(S3C2440, "SMDK2440")
+	.dt_compat      = smdk2440_dt_compat,   /* add by Flinn */
+```
+
 
 
 # 设备树
@@ -253,31 +283,107 @@ or
 tftp 32000000 mini2440.dtb;tftp 30007FC0 uImage;bootm 0x30007FC0 - 0x32000000 
 ```
 
-问题：
+
+
+
+
+
+
+
+
+# 根文件系统
+
+### yaffs
 
 ```
-mini2440 # bootm 0x30007FC0 - 0x31000000
+tftp 30000000 rootfs.yaffs2
+nand erase.part rootfs
+nand write.yaffs 30000000 rootfs 
+```
 
-## Current stack ends at 0x33cffda0 *  kernel: cmdline image address = 0x30007fc0
+### jffs2
 
-## Booting kernel from Legacy Image at 30007fc0 ...
+```
+tftp 30000000 rootfs.jffs2
+nand erase.part rootfs
+nand write.jffs2 30000000 rootfs 
+set bootargs noinitrd root=/dev/mtdblock4 rw init=/linuxrc console=ttySAC0,115200 rootfstype=jffs2
+```
 
-   Image Name:   Linux-3.10.79
-   Created:      2019-03-01   2:42:44 UTC
-   Image Type:   ARM Linux Kernel Image (uncompressed)
-   Data Size:    2607344 Bytes = 2.5 MiB
-   Load Address: 30108000
-   Entry Point:  30108000
-   Verifying Checksum ... OK
-   kernel data at 0x30008000, len = 0x0027c8f0 (2607344)
 
-Skipping init Ramdisk
-No init Ramdisk
-   ramdisk start = 0x00000000, ramdisk end = 0x00000000
-- fdt: cmdline image address = 0x31000000
-Checking for 'FDT'/'FDT Image' at 31000000
-ERROR: Did not find a cmdline Flattened Device Tree
-Could not find a valid device tree
-Command failed, result=1mini2440 #
+
+### 新建目录
+
+​	mkdir ~/mini2440/rootfs/fs_new
+​		
+
+	tar xvf busybox-1.22.1.tar.bz2
+	#make menuconfig   在setting中，制定交叉编译器
+ 	Busybox Settings  --->  
+ 	  Build Options  ---> 
+ 	  	 (arm-linux-) Cross Compiler prefix 
+ 	  	 
+	/home/flinn/tools/4.4.3/bin/arm-none-linux-gnueabi-
+	make CONFIG_PREFIX=/home/flinn/Device-Tree/rootfs/rootfs install
+### 创建console
+
+现在上面编译后busybox目录是work/tmp/first_fs
+	在此目录下：ls /dev/console /dev/null -l
+	crw------- 1 root root 5, 1 2015-01-05 20:57 /dev/console
+	crw-rw-rw- 1 root root 1, 3 2015-01-05 20:30 /dev/null
+	那么根据它来创建console null等设备
+	
+
+	#mkdir dev
+	#cd dev
+	#mknod console c 5 1 
+	#mknod null c 1 3
+	#ls -l
+	显示：
+	 crw-r--r-- 1 root root 5, 1 2015-05-06 20:39 console
+	crw-r--r-- 1 root root 1, 3 2015-05-06 20:40 null
+	表示创建成功
+
+
+### 配置项
+
+#mkdir etc
+#vim  etc/inittab
+	
+
+	输入：
+	console::askfirst:-/bin/sh
+
+
+### 安装c库
+
+#cd /home/flinn/tools/4.4.3/
+#find /home/flinn/tools/4.4.3/ -name lib
+	显示以下库：
+		-/home/flinn/tools/4.4.3/arm-none-linux-gnueabi/debug-root/usr/lib
+		/home/flinn/tools/4.4.3/arm-none-linux-gnueabi/lib
+		/home/flinn/tools/4.4.3/arm-none-linux-gnueabi/sys-root/usr/lib
+		/home/flinn/tools/4.4.3/arm-none-linux-gnueabi/sys-root/lib
+		/home/flinn/tools/4.4.3/lib
+
+
+	 我们需要：
+	 	/home/flinn/tools/4.4.3/arm-none-linux-gnueabi/sys-root/usr/lib
+		/home/flinn/tools/4.4.3/arm-none-linux-gnueabi/sys-root/lib
+#cd /work/tmp/first_fs/
+ #mkdir lib
+ #mkdir usr/lib -p
+ #sudo cp /home/flinn/tools/4.4.3/arm-none-linux-gnueabi/sys-root/usr/lib/*so* ./lib -d
+ #sudo cp /home/flinn/tools/4.4.3/arm-none-linux-gnueabi/sys-root/usr/lib/*so* ./usr/lib -d
+
+ 最小根文件系统已经完成
+
+
+
+### 制作文件系统
+
+```bash
+#sudo mkfs.jffs2 -n -s 2048 -e 128KiB -d rootfs -o rootfs.jffs2
+#sudo mkyaffs2image_new rootfs rootfs.yaffs2        // mkyaffs2image_new!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ```
 
