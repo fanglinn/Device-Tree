@@ -293,20 +293,24 @@ tftp 32000000 mini2440.dtb;tftp 30007FC0 uImage;bootm 0x30007FC0 - 0x32000000
 
 # 根文件系统
 
+### 注意！！！
+
+busybox使用arm-linux-gcc-4.4.3编译， 使用arm-linux-gcc-4.3.2的库文件 ！！！！！！！！！！！！！！！
+
 ### yaffs
 
-```
+```bash
 tftp 30000000 rootfs.yaffs2
 nand erase.part rootfs
-nand write.yaffs 30000000 rootfs 
+nand write.yaffs 30000000 rootfs $filesize
 ```
 
 ### jffs2
 
-```
+```bash
 tftp 30000000 rootfs.jffs2
 nand erase.part rootfs
-nand write.jffs2 30000000 rootfs 
+nand write.jffs2 30000000 rootfs $filesize
 set bootargs noinitrd root=/dev/mtdblock4 rw init=/linuxrc console=ttySAC0,115200 rootfstype=jffs2
 ```
 
@@ -317,13 +321,15 @@ set bootargs noinitrd root=/dev/mtdblock4 rw init=/linuxrc console=ttySAC0,11520
 ​	mkdir ~/mini2440/rootfs/fs_new
 ​		
 
-	tar xvf busybox-1.22.1.tar.bz2
+	tar xvf busybox-1.20.1.tar.bz2
 	#make menuconfig   在setting中，制定交叉编译器
  	Busybox Settings  --->  
  	  Build Options  ---> 
  	  	 (arm-linux-) Cross Compiler prefix 
  	  	 
-	/home/flinn/tools/4.4.3/bin/arm-none-linux-gnueabi-
+
+	/home/flinn/tools/4.4.3/bin/arm-linux-
+	make
 	make CONFIG_PREFIX=/home/flinn/Device-Tree/rootfs/rootfs install
 ### 创建console
 
@@ -357,24 +363,35 @@ set bootargs noinitrd root=/dev/mtdblock4 rw init=/linuxrc console=ttySAC0,11520
 
 ### 安装c库
 
-#cd /home/flinn/tools/4.4.3/
-#find /home/flinn/tools/4.4.3/ -name lib
-	显示以下库：
-		-/home/flinn/tools/4.4.3/arm-none-linux-gnueabi/debug-root/usr/lib
-		/home/flinn/tools/4.4.3/arm-none-linux-gnueabi/lib
-		/home/flinn/tools/4.4.3/arm-none-linux-gnueabi/sys-root/usr/lib
-		/home/flinn/tools/4.4.3/arm-none-linux-gnueabi/sys-root/lib
-		/home/flinn/tools/4.4.3/lib
+#cd /home/flinn/tools/4.3.2/
+#find /home/flinn/tools/4.3.2/ -name lib
+显示以下库：
+
+```
+./arm-none-linux-gnueabi/libc/usr/lib
+./arm-none-linux-gnueabi/libc/armv4t/usr/lib
+./arm-none-linux-gnueabi/libc/armv4t/lib
+./arm-none-linux-gnueabi/libc/thumb2/usr/lib
+./arm-none-linux-gnueabi/libc/thumb2/lib
+./arm-none-linux-gnueabi/libc/lib
+./arm-none-linux-gnueabi/lib
+./lib
+```
+
+
 
 
 	 我们需要：
-	 	/home/flinn/tools/4.4.3/arm-none-linux-gnueabi/sys-root/usr/lib
-		/home/flinn/tools/4.4.3/arm-none-linux-gnueabi/sys-root/lib
+	./arm-none-linux-gnueabi/libc/armv4t/usr/lib
+	./arm-none-linux-gnueabi/libc/armv4t/lib
 #cd /work/tmp/first_fs/
+
+```
  #mkdir lib
  #mkdir usr/lib -p
- #sudo cp /home/flinn/tools/4.4.3/arm-none-linux-gnueabi/sys-root/usr/lib/*so* ./lib -d
- #sudo cp /home/flinn/tools/4.4.3/arm-none-linux-gnueabi/sys-root/usr/lib/*so* ./usr/lib -d
+ #sudo cp /home/flinn/tools/4.3.2/arm-none-linux-gnueabi/libc/armv4t/lib/*so* ./lib -d
+ #sudo cp /home/flinn/tools/4.3.2/arm-none-linux-gnueabi/libc/armv4t/usr/lib/*so* ./usr/lib -d
+```
 
  最小根文件系统已经完成
 
@@ -383,7 +400,59 @@ set bootargs noinitrd root=/dev/mtdblock4 rw init=/linuxrc console=ttySAC0,11520
 ### 制作文件系统
 
 ```bash
-#sudo mkfs.jffs2 -n -s 2048 -e 128KiB -d rootfs -o rootfs.jffs2
-#sudo mkyaffs2image_new rootfs rootfs.yaffs2        // mkyaffs2image_new!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#sudo mkyaffs2image fs_mini_mdev_new fs_mini_mdev_new.yaffs2       
+#sudo mkfs.jffs2 -n -s 2048 -e 128KiB -d fs_mini_mdev_new -o fs_mini_mdev_new.jffs2
+```
+
+
+
+### 烧录可用的文件系统
+
+```bash
+yaffs2
+tftp 30000000 fs_mini_mdev_new.yaffs2
+nand erase.part rootfs
+nand write.yaffs 30000000 rootfs $filesize
+
+jffs2
+tftp 30000000 fs_mini_mdev_new.jffs2
+nand erase.part rootfs
+nand write.jffs2 30000000 rootfs $filesize
+set bootargs noinitrd root=/dev/mtdblock4 rw init=/linuxrc console=ttySAC0,115200 rootfstype=jffs2
+```
+
+
+
+
+
+## NFS支持
+
+### ENV
+
+vim /etc/exports
+
+```bash
+/home/flinn/Device-Tree/rootfs/fs_mini_mdev_new *(rw,sync,no_root_squash)
+```
+
+重启
+
+```bash
+sudo /etc/init.d/nfs-kernel-server restart
+```
+
+### nfs烧录
+
+```bash
+fs-yaffs2:
+	nfs 30000000 192.168.10.119:/home/flinn/Device-Tree/rootfs/fs_mini_mdev_new.yaffs2
+	nand erase rootfs
+	nand write.yaffs 30000000 rootfs 85b540
+```
+
+### nfs启动
+
+```sh
+set bootargs noinitrd init=/linuxrc console=ttySAC0,115200 root=/dev/nfs nfsroot=192.168.10.119:/home/flinn/Device-Tree/rootfs/fs_mini_mdev_new  ip=192.168.10.123:192.168.10.119:192.168.10.1:255.255.255.0::eth0:off 
 ```
 
