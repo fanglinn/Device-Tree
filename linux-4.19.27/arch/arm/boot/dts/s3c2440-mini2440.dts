@@ -1,0 +1,26 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * SAMSUNG SMDK2440 board device tree source
+ *
+ * Copyright (c) 2018 flinn <flinn682@foxmail.com>
+ * dtc -I dtb -O dts -o s3c2440-mini2440.dts s3c2440-mini2440.dtb
+ */
+
+/dts-v1/;
+
+/{
+	model = "SMDK2440";
+	compatible = "samsung,smdk2440";
+
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	memory {  /* /memory */
+		device_type = "memory";
+		reg =  <0x30000000 0x4000000 0 4096>;		
+	};
+
+	chosen {
+		bootargs = "noinitrd root=/dev/mtdblock4 rw init=/linuxrc console=ttySAC0,115200";
+	};
+};
