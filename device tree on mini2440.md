@@ -423,6 +423,67 @@ set bootargs noinitrd root=/dev/mtdblock4 rw init=/linuxrc console=ttySAC0,11520
 
 
 
+### 优化
+
+当前不支持PROC
+
+支持PROC
+
+#vim  etc/inittab
+		
+
+```
+console::askfirst:-/bin/sh
+::sysinit:/etc/init.d/rcS
+```
+
+
+​	创建/etc/init.d/rcS 文件
+
+		mkdir etc/init.d
+		vim  etc/init.d/rcS
+		mount -t proc none /proc
+		chmod +x etc/init.d/rcS
+使用mount -a
+
+vim  /etc/init.d/rcS
+		
+
+```bash
+#mount -t proc none /proc
+mount -a
+```
+
+mount -a 依赖/etc/fstab
+
+vim /etc/fstab
+
+```bash
++ # device    mount-point      type   option    dump   fsck  order
++ proc         /proc            proc     defaults     0      0
+```
+
+支持mdev
+
+cd rootfs
+mkdir sys
+vim etc/fstab
+
+```bash
+sysfs           /sys           sysfs    defaults     0      0
+tmpfs           /dev           tmpfs    defaults     0      0
+```
+
+vim etc/init.d/rcS
+
+```bash
+mount -a 
+mkdir /dev/pts/
+mount -t devpts devpts /dev/pts
+echo /sbin/mdev > /proc/sys/kernel/hotplug
+mdev -s
+```
+
 
 
 ## NFS支持
