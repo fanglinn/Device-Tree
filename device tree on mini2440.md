@@ -486,6 +486,16 @@ mdev -s
 
 
 
+## 工具编译
+
+切换gcc版本：
+
+```
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games://home/flinn/tools/4.4.3/bin
+```
+
+
+
 ## NFS支持
 
 ### ENV
@@ -514,6 +524,6 @@ fs-yaffs2:
 ### nfs启动
 
 ```sh
-set bootargs noinitrd init=/linuxrc console=ttySAC0,115200 root=/dev/nfs nfsroot=192.168.10.119:/home/flinn/Device-Tree/rootfs/fs_mini_mdev_new  ip=192.168.10.123:192.168.10.119:192.168.10.1:255.255.255.0::eth0:off 
+set bootargs noinitrd init=/linuxrc console=ttySAC0,115200 root=/dev/nfs nfsroot=192.168.10.221:/work/rootfs  ip=192.168.10.123:192.168.10.221:192.168.10.1:255.255.255.0::eth0:off 
 ```
 
