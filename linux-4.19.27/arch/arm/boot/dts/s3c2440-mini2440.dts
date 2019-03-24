@@ -32,6 +32,13 @@
 		device_type = "memory";
 		reg =  <0x30000000 0x4000000 0 4096>;		
 	};
+	
+	xti:xti-clock {
+		compatible = "fixed-clock";
+		clock-frequency = <12000000>;
+		clock-outpur-names = "xti";
+		#clock-cells = <0>;
+	};
 
 	chosen {
 		bootargs = "noinitrd root=/dev/mtdblock4 rw init=/linuxrc console=ttySAC0,115200";
