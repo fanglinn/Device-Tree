@@ -8,6 +8,13 @@ menuconfig BACKLIGHT_LCD_SUPPORT
 	  Enable this to be able to choose the drivers for controlling the
 	  backlight and the LCD panel on some platforms, for example on PDAs.
 
+config BACKLIGHT_MINI2440
+	tristate "Backlight support for mini2440 from FriendlyARM"
+	depends on BACKLIGHT_LCD_SUPPORT
+	help
+	  backlight driver for MINI2440 from FriendlyARM
+
+
 if BACKLIGHT_LCD_SUPPORT
 
 #

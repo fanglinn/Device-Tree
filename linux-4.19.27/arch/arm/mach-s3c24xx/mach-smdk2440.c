@@ -146,6 +146,218 @@ static struct s3c2410fb_mach_info smdk2440_fb_info __initdata = {
 	.lpcsel		= ((0xCE6) & ~7) | 1<<4,
 };
 
+/* LCD driver info */
+
+/*static struct s3c2410fb_display mini2440_lcd_cfg __initdata = {
+
+	.lcdcon5	= S3C2410_LCDCON5_FRM565 |
+			  S3C2410_LCDCON5_INVVLINE |
+			  S3C2410_LCDCON5_INVVFRAME |
+			  S3C2410_LCDCON5_PWREN |
+			  S3C2410_LCDCON5_HWSWP,
+
+	.type		= S3C2410_LCDCON1_TFT,
+
+	.width		= 240,
+	.height		= 320,
+
+	.pixclock	= 166667, // HCLK 60 MHz, divisor 10 
+	.xres		= 240,
+	.yres		= 320,
+	.bpp		= 16,
+	.left_margin	= 20,
+	.right_margin	= 8,
+	.hsync_len	= 4,
+	.upper_margin	= 8,
+	.lower_margin	= 7,
+	.vsync_len	= 4,
+};
+
+static struct s3c2410fb_mach_info mini2440_fb_info __initdata = {
+	.displays	= &mini2440_lcd_cfg,
+	.num_displays	= 1,
+	.default_display = 0,
+
+#if 0
+	// currently setup by downloader 
+	.gpccon		= 0xaa940659,
+	.gpccon_mask	= 0xffffffff,
+	.gpcup		= 0x0000ffff,
+	.gpcup_mask	= 0xffffffff,
+	.gpdcon		= 0xaa84aaa0,
+	.gpdcon_mask	= 0xffffffff,
+	.gpdup		= 0x0000faff,
+	.gpdup_mask	= 0xffffffff,
+#endif
+
+	.lpcsel		= ((0xCE6) & ~7) | 1<<4,
+};
+
+*/
+
+/* LCD driver info */
+
+#if defined(CONFIG_FB_S3C2410_N240320)
+
+#define LCD_WIDTH 240
+#define LCD_HEIGHT 320
+#define LCD_PIXCLOCK 100000
+
+#define LCD_RIGHT_MARGIN 36
+#define LCD_LEFT_MARGIN 19
+#define LCD_HSYNC_LEN 5
+
+#define LCD_UPPER_MARGIN 1
+#define LCD_LOWER_MARGIN 5
+#define LCD_VSYNC_LEN 1
+
+#elif defined(CONFIG_FB_S3C2410_W320240)
+#define LCD_WIDTH 320
+#define LCD_HEIGHT 240
+#define LCD_PIXCLOCK 170000
+
+#define LCD_RIGHT_MARGIN 0x44
+#define LCD_LEFT_MARGIN 0x04
+#define LCD_HSYNC_LEN 0x01
+
+#define LCD_UPPER_MARGIN 10
+#define LCD_LOWER_MARGIN 4
+#define LCD_VSYNC_LEN 1
+
+#define LCD_CON5 (S3C2410_LCDCON5_FRM565 | S3C2410_LCDCON5_INVVFRAME | S3C2410_LCDCON5_INVVLINE | S3C2410_LCDCON5_HWSWP )
+
+#elif defined(CONFIG_FB_S3C2410_N480272)
+#define LCD_WIDTH 480
+#define LCD_HEIGHT 272
+#define LCD_PIXCLOCK 100000
+
+#define LCD_RIGHT_MARGIN 36
+#define LCD_LEFT_MARGIN 19
+#define LCD_HSYNC_LEN 5
+
+#define LCD_UPPER_MARGIN 1
+#define LCD_LOWER_MARGIN 5
+#define LCD_VSYNC_LEN 1
+
+#elif defined(CONFIG_FB_S3C2410_TFT640480)
+#define LCD_WIDTH 640
+#define LCD_HEIGHT 480
+#define LCD_PIXCLOCK 40000
+
+#define LCD_RIGHT_MARGIN 67
+#define LCD_LEFT_MARGIN 40
+#define LCD_HSYNC_LEN 31
+
+#define LCD_UPPER_MARGIN 5
+#define LCD_LOWER_MARGIN 25
+#define LCD_VSYNC_LEN 1
+
+#elif defined(CONFIG_FB_S3C2410_T240320)
+#define LCD_WIDTH 240
+#define LCD_HEIGHT 320
+#define LCD_PIXCLOCK 170000
+#define LCD_RIGHT_MARGIN 25
+#define LCD_LEFT_MARGIN 0
+#define LCD_HSYNC_LEN 4
+#define LCD_UPPER_MARGIN 1
+#define LCD_LOWER_MARGIN 4
+#define LCD_VSYNC_LEN 1
+#define LCD_CON5 (S3C2410_LCDCON5_FRM565 | S3C2410_LCDCON5_INVVDEN | S3C2410_LCDCON5_INVVFRAME | S3C2410_LCDCON5_INVVLINE | S3C2410_LCDCON5_INVVCLK | S3C2410_LCDCON5_HWSWP )
+
+#elif defined(CONFIG_FB_S3C2410_X240320)
+#define LCD_WIDTH 240
+#define LCD_HEIGHT 320
+#define LCD_PIXCLOCK 170000
+#define LCD_RIGHT_MARGIN 25
+#define LCD_LEFT_MARGIN 0
+#define LCD_HSYNC_LEN 4
+#define LCD_UPPER_MARGIN 0
+#define LCD_LOWER_MARGIN 4
+#define LCD_VSYNC_LEN 9
+#define LCD_CON5 (S3C2410_LCDCON5_FRM565 | S3C2410_LCDCON5_INVVDEN | S3C2410_LCDCON5_INVVFRAME | S3C2410_LCDCON5_INVVLINE | S3C2410_LCDCON5_INVVCLK | S3C2410_LCDCON5_HWSWP )
+
+#elif defined(CONFIG_FB_S3C2410_TFT800480)
+#define LCD_WIDTH 800
+#define LCD_HEIGHT 480
+#define LCD_PIXCLOCK 40000
+
+#define LCD_RIGHT_MARGIN 67
+#define LCD_LEFT_MARGIN 40
+#define LCD_HSYNC_LEN 31
+
+#define LCD_UPPER_MARGIN 25
+#define LCD_LOWER_MARGIN 5
+#define LCD_VSYNC_LEN 1
+
+#elif defined(CONFIG_FB_S3C2410_VGA1024768)
+#define LCD_WIDTH 1024
+#define LCD_HEIGHT 768
+#define LCD_PIXCLOCK 80000
+
+#define LCD_RIGHT_MARGIN 15
+#define LCD_LEFT_MARGIN 199
+#define LCD_HSYNC_LEN 15
+
+#define LCD_UPPER_MARGIN 1
+#define LCD_LOWER_MARGIN 1
+#define LCD_VSYNC_LEN 1
+#define LCD_CON5 (S3C2410_LCDCON5_FRM565 | S3C2410_LCDCON5_HWSWP)
+
+#endif
+#if defined (LCD_WIDTH)
+
+static struct s3c2410fb_display mini2440_lcd_cfg __initdata = {
+#if !defined (LCD_CON5)
+	.lcdcon5        = S3C2410_LCDCON5_FRM565 |
+		S3C2410_LCDCON5_INVVLINE |
+		S3C2410_LCDCON5_INVVFRAME |
+		S3C2410_LCDCON5_PWREN |
+		S3C2410_LCDCON5_HWSWP,
+#else
+	.lcdcon5        = LCD_CON5,
+#endif
+	
+	.type           = S3C2410_LCDCON1_TFT,
+	
+	.width          = LCD_WIDTH,
+	.height         = LCD_HEIGHT,
+	
+	.pixclock       = LCD_PIXCLOCK,
+	.xres           = LCD_WIDTH,
+	.yres           = LCD_HEIGHT,
+	.bpp            = 16,
+	.left_margin    = LCD_LEFT_MARGIN + 1,
+	.right_margin   = LCD_RIGHT_MARGIN + 1,
+	.hsync_len      = LCD_HSYNC_LEN + 1,
+	.upper_margin   = LCD_UPPER_MARGIN + 1,
+	.lower_margin   = LCD_LOWER_MARGIN + 1,
+	
+	.vsync_len      = LCD_VSYNC_LEN + 1,
+};
+
+static struct s3c2410fb_mach_info mini2440_fb_info __initdata = {
+	.displays       = &mini2440_lcd_cfg,
+	.num_displays   = 1,
+	.default_display = 0,
+	
+	.gpccon =       0xaa955699,
+	.gpccon_mask =  0xffc003cc,
+	.gpcup =        0x0000ffff,
+	.gpcup_mask =   0xffffffff,
+	
+	.gpdcon =       0xaa95aaa1,
+	.gpdcon_mask =  0xffc0fff0,
+	.gpdup =        0x0000faff,
+	.gpdup_mask =   0xffffffff,
+	
+	
+	.lpcsel         = 0xf82,
+};
+
+#endif
+
+
+
 
 /*
 * DM9000 add by Flinn for mini2440
@@ -201,7 +413,12 @@ static void __init smdk2440_init_time(void)
 
 static void __init smdk2440_machine_init(void)
 {
-	s3c24xx_fb_set_platdata(&smdk2440_fb_info);
+	//s3c24xx_fb_set_platdata(&smdk2440_fb_info);
+
+#if defined (LCD_WIDTH)
+	s3c24xx_fb_set_platdata(&mini2440_fb_info);
+#endif
+
 	s3c_i2c0_set_platdata(NULL);
 
 	platform_add_devices(smdk2440_devices, ARRAY_SIZE(smdk2440_devices));
